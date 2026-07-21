@@ -6,8 +6,8 @@
 功能：
 1. 读取每个 INPUT_DIR 下的 n_gram 统计结果（n=2,5,10,20）
 2. 对每个 n 值，计算所有层的均值
-3. 读取每个 INPUT_DIR 下的 Rademacher 复杂度结果（500,1000,2000）
-4. 对每个值，计算所有专家的均值作为专家选择的复杂度
+3. 读取每个 INPUT_DIR 下的 RSS 结果（500,1000,2000）
+4. 对每个值，读取全局 RSS margin
 5. 生成 CSV 矩阵，每行是一个 INPUT_DIR，每列是一个指标
 
 用法:
@@ -96,9 +96,9 @@ def calculate_ngram_mean_across_layers(stats: Dict[str, Any]) -> float:
     return float(np.mean(self_loop_ratios))
 
 
-def load_rademacher_complexity(input_dir: str, value: int) -> Optional[Dict[str, Any]]:
+def load_rss_results(input_dir: str, value: int) -> Optional[Dict[str, Any]]:
     """
-    加载 Rademacher 复杂度结果
+    加载 RSS 结果
     
     Args:
         input_dir: 输入目录
@@ -107,7 +107,7 @@ def load_rademacher_complexity(input_dir: str, value: int) -> Optional[Dict[str,
     Returns:
         结果字典，如果文件不存在则返回 None
     """
-    json_file = os.path.join(input_dir, f'rademacher/rademacher_complexity_{value}', 'rademacher_complexity.json')
+    json_file = os.path.join(input_dir, f'rss/rss_{value}', 'rss.json')
     
     if not os.path.exists(json_file):
         print(f"警告: 文件不存在: {json_file}")
@@ -122,34 +122,17 @@ def load_rademacher_complexity(input_dir: str, value: int) -> Optional[Dict[str,
         return None
 
 
-def calculate_rademacher_mean_across_experts(results: Dict[str, Any]) -> float:
+def calculate_rss_mean(results: Dict[str, Any]) -> float:
     """
-    计算所有专家的 Rademacher 复杂度均值
+    读取全局 RSS margin
     
     Args:
-        results: Rademacher 复杂度结果
+        results: RSS 结果
     
     Returns:
         所有专家的均值
     """
-    layer_results = results.get('layer_results', {})
-    if not layer_results:
-        return 0.0
-    
-    all_expert_complexities = []
-    
-    # 遍历所有层
-    for layer_id, layer_data in layer_results.items():
-        expert_rademacher = layer_data.get('expert_rademacher', {})
-        if expert_rademacher:
-            # 收集该层所有专家的复杂度值
-            for expert_id, complexity in expert_rademacher.items():
-                all_expert_complexities.append(complexity)
-    
-    if not all_expert_complexities:
-        return 0.0
-    
-    return float(np.mean(all_expert_complexities))
+    return float(results.get('global_rss_margin', 0.0))
 
 
 def parse_input_dirs_from_batch_call(batch_call_file: str) -> List[str]:
@@ -215,8 +198,8 @@ def aggregate_results(input_dirs: List[str], output_file: str):
     # n-gram 的 n 值列表
     n_values = [2, 5, 10, 20]
     
-    # Rademacher 复杂度的值列表
-    rademacher_values = [500, 1000, 2000]
+    # RSS 采样规模列表
+    rss_values = [500, 1000, 2000]
     
     # 存储所有结果
     all_results = []
@@ -246,19 +229,18 @@ def aggregate_results(input_dirs: List[str], output_file: str):
             result_row[f'ngram_{n}_ratio_mean'] = mean_ratio
             print(f"    n={n}: Self-Loop Ratio 均值 = {mean_ratio:.6f}")
         
-        # 处理 Rademacher 复杂度结果
-        print("  读取 Rademacher 复杂度结果...")
-        for value in rademacher_values:
-            results = load_rademacher_complexity(input_dir, value)
+        # 处理 RSS 结果
+        print("  读取 RSS 结果...")
+        for value in rss_values:
+            results = load_rss_results(input_dir, value)
             if results is None:
-                result_row[f'rademacher_{value}_mean'] = None
+                result_row[f'rss_{value}_mean'] = None
                 print(f"    警告: value={value} 的结果不存在")
                 continue
             
-            # 计算所有专家的均值
-            mean_complexity = calculate_rademacher_mean_across_experts(results)
-            result_row[f'rademacher_{value}_mean'] = mean_complexity
-            print(f"    value={value}: 均值 = {mean_complexity:.6f}")
+            mean_rss = calculate_rss_mean(results)
+            result_row[f'rss_{value}_mean'] = mean_rss
+            print(f"    value={value}: RSS = {mean_rss:.6f}")
         
         all_results.append(result_row)
     
@@ -268,7 +250,7 @@ def aggregate_results(input_dirs: List[str], output_file: str):
     # 定义列名
     columns = ['directory', 'full_path']
     columns.extend([f'ngram_{n}_ratio_mean' for n in n_values])
-    columns.extend([f'rademacher_{value}_mean' for value in rademacher_values])
+    columns.extend([f'rss_{value}_mean' for value in rss_values])
     
     # 写入 CSV
     os.makedirs(os.path.dirname(output_file) if os.path.dirname(output_file) else '.', exist_ok=True)
@@ -286,18 +268,18 @@ def aggregate_results(input_dirs: List[str], output_file: str):
     
     # 打印摘要
     print("\n结果摘要:")
-    print(f"{'目录':<50} {'N-gram Self-Loop Ratio (2,5,10,20)':<40} {'Rademacher (500,1000,2000)':<30}")
+    print(f"{'目录':<50} {'N-gram Self-Loop Ratio (2,5,10,20)':<40} {'RSS (500,1000,2000)':<30}")
     print("-" * 120)
     for result in all_results:
         ngram_str = ", ".join([
             f"{result.get(f'ngram_{n}_ratio_mean', 0):.6f}" if result.get(f'ngram_{n}_ratio_mean') is not None else "N/A"
             for n in n_values
         ])
-        rademacher_str = ", ".join([
-            f"{result.get(f'rademacher_{value}_mean', 0):.6f}" if result.get(f'rademacher_{value}_mean') is not None else "N/A"
-            for value in rademacher_values
+        rss_str = ", ".join([
+            f"{result.get(f'rss_{value}_mean', 0):.6f}" if result.get(f'rss_{value}_mean') is not None else "N/A"
+            for value in rss_values
         ])
-        print(f"{result['directory']:<50} {ngram_str:<40} {rademacher_str:<30}")
+        print(f"{result['directory']:<50} {ngram_str:<40} {rss_str:<30}")
 
 
 def main():
@@ -334,4 +316,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

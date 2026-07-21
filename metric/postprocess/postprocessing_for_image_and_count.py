@@ -513,6 +513,7 @@ def convert_record_to_output_format(record: Dict) -> Dict:
         filtered_expert_ids = []
         filtered_weights = []
         filtered_logits = []
+        next_expert_logit = None
         
         min_len = min(len(expert_ids), len(weights))
         for i in range(min_len):
@@ -526,13 +527,23 @@ def convert_record_to_output_format(record: Dict) -> Dict:
                 else:
                     filtered_weights.append(0.0)
                 
-                # 从router_logits中提取对应expert_id的logit
-                # 如果logits是完整的专家logits列表，则根据expert_id索引提取
+                # 从router_logits中提取对应 expert_id 的 logit
+                # 如果 logits 是完整的专家 logits 列表，则根据 expert_id 索引提取
                 if logits and len(logits) > expert_id:
                     filtered_logits.append(float(logits[expert_id]))
                 elif logits and i < len(logits):
-                    # 如果logits长度与expert_ids相同，直接对应
+                    # 如果 logits 长度与 expert_ids 相同，直接对应
                     filtered_logits.append(float(logits[i]))
+
+        if logits and filtered_expert_ids:
+            selected_id_set = set(filtered_expert_ids)
+            candidate_unselected_logits = [
+                float(logits[idx])
+                for idx in range(len(logits))
+                if idx not in selected_id_set
+            ]
+            if candidate_unselected_logits:
+                next_expert_logit = max(candidate_unselected_logits)
         
         # 构建该层的数据
         layer_data = {
@@ -543,6 +554,8 @@ def convert_record_to_output_format(record: Dict) -> Dict:
         # 如果存在logits，添加到layer_data中
         if filtered_logits:
             layer_data["logits"] = filtered_logits
+        if next_expert_logit is not None:
+            layer_data["next_expert_logit"] = float(next_expert_logit)
         
         # 只有当该层有数据时才添加
         if filtered_expert_ids:
@@ -1114,4 +1127,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

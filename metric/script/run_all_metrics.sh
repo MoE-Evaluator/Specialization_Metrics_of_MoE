@@ -11,7 +11,7 @@
 #     2. Expert group routing and N-gram statistics
 #     3. Count matrix processing
 #     4. N-gram statistics (detailed)
-#     5. Rademacher complexity calculation
+#     5. Routing Stiffness Score (RSS) calculation
 #     6. Results aggregation
 #
 # Usage:
@@ -20,7 +20,7 @@
 # Options:
 #   --step <step_name>       Run specific step(s). Options:
 #                              postprocess, expert_group, count_matrix,
-#                              ngram_rademacher, aggregate, all (default: all)
+#                              ngram_rss, aggregate, all (default: all)
 #   --config <config_file>   Use external config file for INPUT_DIRS
 #   --threshold <value>      Threshold for expert group routing (default: 0.85)
 #   --n_values <values>      N values for n-gram (default: "2 5 10 20")
@@ -46,7 +46,7 @@ COMPUTE_METRICS_SCRIPT="${UTILS_DIR}/compute_expert_metrics.py"
 AGGREGATE_NGRAM_SCRIPT="${UTILS_DIR}/aggregate_expert_group_ngram.py"
 PROCESS_COUNT_MATRIX_SCRIPT="${UTILS_DIR}/process_count_matrix.py"
 N_GRAM_SCRIPT="${UTILS_DIR}/n_gram_statistics.py"
-RADEMACHER_SCRIPT="${UTILS_DIR}/rademacher_complexity.py"
+RSS_SCRIPT="${UTILS_DIR}/rss.py"
 AGGREGATE_RESULTS_SCRIPT="${UTILS_DIR}/aggregate_results.py"
 
 # ============================================================================
@@ -61,7 +61,7 @@ RESULT_SAVE_DIR="./results/full_analysis"
 THRESHOLD=0.85
 MODE="threshold"
 N_VALUES=(2 5 10 20)
-RADEMACHER_VALUES=(500 1000 2000)
+RSS_SAMPLE_VALUES=(500 1000 2000)
 
 # Step control
 RUN_STEP="all"
@@ -382,13 +382,13 @@ run_count_matrix() {
 }
 
 # ============================================================================
-# Step 4: N-gram Statistics and Rademacher Complexity
+# Step 4: N-gram Statistics and RSS
 # ============================================================================
-run_ngram_rademacher() {
-    log_section "Step 4: N-gram Statistics and Rademacher Complexity"
+run_ngram_rss() {
+    log_section "Step 4: N-gram Statistics and RSS"
 
     if [ ${#INPUT_DIRS[@]} -eq 0 ]; then
-        log_info "No INPUT_DIRS defined, skipping ngram_rademacher step"
+        log_info "No INPUT_DIRS defined, skipping ngram_rss step"
         return 0
     fi
 
@@ -424,22 +424,23 @@ run_ngram_rademacher() {
             done
         fi
 
-        # Rademacher complexity
-        if check_script_exists "$RADEMACHER_SCRIPT"; then
-            log_info "Running Rademacher complexity..."
-            for value in "${RADEMACHER_VALUES[@]}"; do
-                local output_dir="${input_dir}/rademacher/rademacher_complexity_${value}"
-                local output_file="${output_dir}/rademacher_complexity.json"
+        # Routing Stiffness Score (historical path name kept for compatibility)
+        if check_script_exists "$RSS_SCRIPT"; then
+            log_info "Running Routing Stiffness Score..."
+            for value in "${RSS_SAMPLE_VALUES[@]}"; do
+                local output_dir="${input_dir}/rss/rss_${value}"
+                local output_file="${output_dir}/rss.json"
                 mkdir -p "$output_dir"
 
-                if python "$RADEMACHER_SCRIPT" \
+                if python "$RSS_SCRIPT" \
                     --input_file "$input_file" \
                     --num_samples "$value" \
                     --num_simulations "$value" \
+                    --perturbation_scale 0.0 \
                     --output_file "$output_file"; then
-                    log_success "Rademacher (samples=$value) completed"
+                    log_success "RSS (samples=$value) completed"
                 else
-                    log_error "Rademacher (samples=$value) failed"
+                    log_error "RSS (samples=$value) failed"
                 fi
             done
         fi
@@ -506,8 +507,8 @@ main() {
         count_matrix)
             run_count_matrix
             ;;
-        ngram_rademacher)
-            run_ngram_rademacher
+        ngram_rss)
+            run_ngram_rss
             ;;
         aggregate)
             run_aggregate
@@ -516,12 +517,12 @@ main() {
             run_postprocess || true
             run_expert_group || true
             run_count_matrix || true
-            run_ngram_rademacher || true
+            run_ngram_rss || true
             run_aggregate || true
             ;;
         *)
             log_error "Unknown step: $RUN_STEP"
-            log_info "Available steps: postprocess, expert_group, count_matrix, ngram_rademacher, aggregate, all"
+            log_info "Available steps: postprocess, expert_group, count_matrix, ngram_rss, aggregate, all"
             exit 1
             ;;
     esac

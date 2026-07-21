@@ -4,7 +4,7 @@ This repository contains the official implementation of **DBES (Domain Bench for
 
 ## Abstract
 
-Mixture-of-Experts (MoE) architectures have emerged as a promising approach for scaling large language models efficiently. However, understanding whether and how experts specialize across different domains remains an open question. We present DBES, a systematic benchmark comprising diverse domain-specific datasets and a comprehensive metric suite including Rademacher complexity, N-gram transition analysis, and expert routing statistics. Our framework enables fine-grained analysis of expert activation patterns, providing insights into the specialization behavior of large-scale MoE models.
+Mixture-of-Experts (MoE) architectures have emerged as a promising approach for scaling large language models efficiently. However, understanding whether and how experts specialize across different domains remains an open question. We present DBES, a systematic benchmark comprising diverse domain-specific datasets and a comprehensive metric suite including Routing Stiffness Score (RSS), N-gram transition analysis, and expert routing statistics. Our framework enables fine-grained analysis of expert activation patterns, providing insights into the specialization behavior of large-scale MoE models.
 
 ## Repository Structure
 
@@ -23,7 +23,7 @@ moe_specialization/
 │   │   └── config_example.sh     # Configuration template
 │   ├── utils/                # Core metric implementations
 │   │   ├── compute_expert_metrics.py    # Expert group routing & N-gram
-│   │   ├── rademacher_complexity.py     # Rademacher complexity
+│   │   ├── rss.py                       # Routing Stiffness Score (RSS)
 │   │   ├── n_gram_statistics.py         # N-gram transition analysis
 │   │   ├── process_count_matrix.py      # Count matrix processing
 │   │   └── aggregate_results.py         # Results aggregation
@@ -81,7 +81,7 @@ The modified SGLang includes the following key features:
 python -c "import sglang; print(sglang.__version__)"
 
 # Verify metric modules
-python -c "from metric.utils import compute_expert_metrics, rademacher_complexity; print('Metrics OK')"
+python -c "from metric.utils import compute_expert_metrics, rss; print('Metrics OK')"
 ```
 
 ## Usage
@@ -173,7 +173,7 @@ bash run_all_metrics.sh \
 
 # Option 3: Run specific metric steps
 bash run_all_metrics.sh --step expert_group --config config.sh
-bash run_all_metrics.sh --step ngram_rademacher --config config.sh
+bash run_all_metrics.sh --step ngram_rss --config config.sh
 bash run_all_metrics.sh --step count_matrix --config config.sh
 ```
 
@@ -184,7 +184,7 @@ bash run_all_metrics.sh --step count_matrix --config config.sh
 | `postprocess` | Image and count generation | Processed data files |
 | `expert_group` | Expert group routing & N-gram statistics | `expert_group_routing.json/csv`, `expert_group_ngram_n{2,5,10,20}.json/csv` |
 | `count_matrix` | Count matrix processing | Domain comparison matrices |
-| `ngram_rademacher` | Detailed N-gram & Rademacher complexity | `n_gram_X/`, `rademacher_complexity_X/` |
+| `ngram_rss` | Detailed N-gram and RSS analysis | `n_gram_X/`, `rss_X/` |
 | `aggregate` | Results aggregation | Summary CSV files |
 | `all` | Run all steps sequentially | All outputs |
 
@@ -202,16 +202,17 @@ python metric/utils/compute_expert_metrics.py \
     --output_dir output/
 ```
 
-### 2. Rademacher Complexity
+### 2. Routing Stiffness Score (RSS)
 
-Measures the complexity of expert selection patterns using Monte Carlo simulation:
+Measures the logit-margin stability of the selected routing path:
 
 ```bash
-python metric/utils/rademacher_complexity.py \
+python metric/utils/rss.py \
     --input_file results_all.jsonl \
     --num_samples 1000 \
     --num_simulations 1000 \
-    --output_file rademacher_results.json
+    --perturbation_scale 0.0 \
+    --output_file rss_results.json
 ```
 
 ### 3. N-gram Transition Analysis

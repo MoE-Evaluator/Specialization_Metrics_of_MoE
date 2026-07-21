@@ -28,7 +28,7 @@ MODE="threshold"  # "threshold" or "topk"
 # TOPK=8          # Uncomment if using topk mode
 
 N_VALUES=(2 5 10 20)
-RADEMACHER_VALUES=(500 1000 2000)
+RSS_SAMPLE_VALUES=(500 1000 2000)
 
 # ============================================================================
 # Input Directories
