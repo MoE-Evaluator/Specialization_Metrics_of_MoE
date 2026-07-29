@@ -219,6 +219,22 @@ python metric/utils/rss.py \
 
 Analyzes sequential patterns in expert activation:
 
+## Visualization
+
+To redraw the paper's performance-correlation figures, including the dedicated
+RSS scatter plot with the current RSS definition (`\sigma=1e-4`), run:
+
+```bash
+python metric/script/redraw_performance_correlation.py \
+    --data-file /path/to/最终数据表.xlsx \
+    --out-dir ./correlation
+```
+
+This script regenerates:
+- `all_metrics_scatter-1.png`
+- `individual_correlations_bar-1.png`
+- `performance_rss_scatter-1.png`
+
 ```bash
 python metric/utils/n_gram_statistics.py \
     --input_file results_all.jsonl \
